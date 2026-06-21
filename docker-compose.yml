@@ -1,0 +1,14 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # persist the vector store + cache models across runs
+      - ./data:/code/data
+      - hf-cache:/root/.cache/huggingface
+
+volumes:
+  hf-cache:

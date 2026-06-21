@@ -1,0 +1,111 @@
+{
+  "corpus": "self",
+  "description": "Golden Q/A pairs for evaluating CodeRAG against its OWN codebase (dogfooding). Each pair is manually verified against the source. Reference answers are concise ground truth; expected_sources list the file(s) that contain the answer. Grow toward 50-200 pairs over time.",
+  "pairs": [
+    {
+      "id": "vs-distance",
+      "question": "What distance metric does CodeRAG's vector store use?",
+      "ground_truth": "Cosine. The Chroma collection is created with hnsw:space set to cosine, and the pipeline converts the returned cosine distance into a similarity.",
+      "expected_sources": ["retrieval/vector_store.py", "retrieval/pipeline.py"],
+      "tags": ["retrieval", "config"]
+    },
+    {
+      "id": "hybrid-fusion",
+      "question": "How does CodeRAG combine BM25 keyword search with vector search?",
+      "ground_truth": "It uses Reciprocal Rank Fusion (RRF): each retriever's ranking contributes 1/(rrf_k + rank) per chunk, and the summed scores produce the fused order. rrf_k defaults to 60.",
+      "expected_sources": ["retrieval/hybrid.py"],
+      "tags": ["retrieval", "hybrid"]
+    },
+    {
+      "id": "reranker-model",
+      "question": "Which cross-encoder model does CodeRAG use for reranking?",
+      "ground_truth": "BAAI/bge-reranker-base, configured under the reranker section of settings.yaml and loaded in retrieval/reranker.py.",
+      "expected_sources": ["retrieval/reranker.py", "config/settings.yaml"],
+      "tags": ["reranking", "config"]
+    },
+    {
+      "id": "citation-guard",
+      "question": "What does the citation guard do when retrieval finds insufficient evidence?",
+      "ground_truth": "It refuses to answer and returns an 'Insufficient evidence' message without ever calling the LLM, when fewer than min_evidence chunks clear the confidence threshold.",
+      "expected_sources": ["generation/citation_guard.py", "generation/chain.py"],
+      "tags": ["generation", "citation"]
+    },
+    {
+      "id": "embedding-model",
+      "question": "What embedding model does CodeRAG use and does it need an API key?",
+      "ground_truth": "BAAI/bge-small-en-v1.5, run locally via sentence-transformers. It needs no API key; the model downloads on first use and is cached.",
+      "expected_sources": ["retrieval/embedder.py", "config/settings.yaml"],
+      "tags": ["embedding"]
+    },
+    {
+      "id": "chunk-functions",
+      "question": "How does the chunker try to keep functions and classes intact?",
+      "ground_truth": "For code languages it splits on class and def boundaries first (separators like newline-class and newline-def), falling back to blank lines, newlines, then spaces, so logical units stay together.",
+      "expected_sources": ["ingestion/chunker.py"],
+      "tags": ["chunking"]
+    },
+    {
+      "id": "chunk-size",
+      "question": "What chunk size and overlap does CodeRAG use, and in what units?",
+      "ground_truth": "600 tokens with 100 tokens of overlap, counted via tiktoken; it falls back to roughly 4 characters per token if tiktoken can't load.",
+      "expected_sources": ["config/settings.yaml", "ingestion/chunker.py"],
+      "tags": ["chunking", "config"]
+    },
+    {
+      "id": "pdf-citation",
+      "question": "How are chunks from PDF files cited?",
+      "ground_truth": "PDFs are loaded one Document per page, and citations include the page number (for example 'file.pdf p.2'), since line numbers are within-page.",
+      "expected_sources": ["ingestion/loaders.py", "ingestion/chunker.py"],
+      "tags": ["ingestion", "citation"]
+    },
+    {
+      "id": "reingest-dedup",
+      "question": "How does CodeRAG avoid duplicate vectors when the same repo is ingested again?",
+      "ground_truth": "build_vector_store resets the collection and writes chunks with stable ids (chunk_id), so re-ingesting replaces rather than duplicates vectors.",
+      "expected_sources": ["retrieval/vector_store.py", "ingestion/chunker.py"],
+      "tags": ["ingestion", "vector_store"]
+    },
+    {
+      "id": "embedder-device",
+      "question": "How does CodeRAG decide which device to run the embedding model on?",
+      "ground_truth": "It auto-detects: CUDA if available, then Apple MPS, otherwise CPU.",
+      "expected_sources": ["retrieval/embedder.py"],
+      "tags": ["embedding"]
+    },
+    {
+      "id": "ingest-sources",
+      "question": "What source types can the /ingest API endpoint accept?",
+      "ground_truth": "local (a path), github (a repo URL that gets cloned), and web (a page URL).",
+      "expected_sources": ["api.py", "ingestion/loaders.py"],
+      "tags": ["api", "ingestion"]
+    },
+    {
+      "id": "bm25-tokenizer",
+      "question": "How does the BM25 tokenizer handle code identifiers like camelCase and snake_case?",
+      "ground_truth": "It lowercases and splits identifiers on camelCase boundaries and non-alphanumeric characters, so create_agent becomes create and agent, and AuthCallbackPage becomes auth, callback, and page.",
+      "expected_sources": ["retrieval/bm25.py"],
+      "tags": ["retrieval", "bm25"]
+    },
+    {
+      "id": "llm-model",
+      "question": "Which LLM does CodeRAG use to generate answers?",
+      "ground_truth": "Google's gemini-2.0-flash, called via langchain-google-genai at low temperature, requiring a GOOGLE_API_KEY.",
+      "expected_sources": ["generation/chain.py"],
+      "tags": ["generation"]
+    },
+    {
+      "id": "config-paths",
+      "question": "How does CodeRAG load config so it works regardless of the current directory?",
+      "ground_truth": "paths.py computes the project root from its own file location and resolves config/settings.yaml and other paths against it, instead of relying on the current working directory.",
+      "expected_sources": ["paths.py"],
+      "tags": ["config"]
+    },
+    {
+      "id": "retrieval-flow",
+      "question": "What are the stages of CodeRAG's query-time retrieval pipeline?",
+      "ground_truth": "Hybrid search (BM25 plus vector) fused with RRF, then cross-encoder reranking to the top_k, then the citation guard before generation.",
+      "expected_sources": ["retrieval/pipeline.py"],
+      "tags": ["retrieval", "architecture"]
+    }
+  ]
+}

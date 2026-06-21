@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets
+.env
+*.env
+!.env.example
+
+# Generated data / vector stores
+data/vector_store/*
+!data/vector_store/.gitkeep
+chroma_db/
+.eval_chroma/
+tmp_repo/
+
+# Logs / caches
+logs/*
+!logs/.gitkeep
+.cache/
+*.log
+
+# Node / frontend
+frontend/node_modules/
+frontend/.next/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

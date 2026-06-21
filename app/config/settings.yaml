@@ -1,0 +1,74 @@
+chunking:
+  # Units are TOKENS (cl100k_base via tiktoken). Spec: 500-800 tokens, ~100 overlap.
+  # If tiktoken can't download its encoder, the chunker falls back to ~4x chars.
+  chunk_size: 600
+  chunk_overlap: 100
+  # Language-specific split points — keeps functions/classes intact
+  code_separators:
+    - "\nclass "
+    - "\ndef "
+    - "\n\n"
+    - "\n"
+    - " "
+
+embedding:
+  model: "BAAI/bge-small-en-v1.5"
+
+# ── Generation LLM (answers) ─────────────────────────────────────────────
+generation:
+  # provider: "gemini" | "groq" | "ollama"
+  provider: "gemini"
+  model: "gemini-2.5-flash"
+  temperature: 0.1
+
+retrieval:
+  top_k: 5                # final chunks returned to the caller
+  vector_search_k: 20     # dense candidates fetched before fusion
+  bm25_k: 20              # keyword candidates fetched before fusion
+  rerank_candidates: 20   # fused candidates handed to the reranker
+
+# ── Phase 2: hybrid retrieval ────────────────────────────────────────────
+hybrid:
+  enabled: true           # combine BM25 + vector via Reciprocal Rank Fusion
+  rrf_k: 60               # RRF damping constant (standard default)
+
+# ── Phase 2: cross-encoder reranking ─────────────────────────────────────
+reranker:
+  enabled: true           # re-score fused candidates for precision
+  model: "BAAI/bge-reranker-base"
+  # If the model can't load (offline/CI), retrieval falls back to fused order.
+
+# ── Phase 2: citation enforcement ────────────────────────────────────────
+citation:
+  # Refuse to answer unless at least `min_evidence` chunk clears the bar.
+  min_evidence: 1
+  # When reranking is active, gate on the reranker probability (0-1).
+  min_rerank_prob: 0.10
+  # Fallback gate when reranking is off: cosine similarity (higher = better).
+  min_similarity: 0.30
+
+vector_store:
+  persist_directory: "./data/vector_store/chroma_db"
+  collection_name: "coderag"
+
+# ── Phase 3: evaluation (RAGAS) ──────────────────────────────────────────
+evaluation:
+  # Regression gate: build fails if mean faithfulness drops below this.
+  min_faithfulness: 0.70
+  # Questions to run for the fast PR smoke subset.
+  subset_size: 15
+  # LLM that JUDGES the answers (faithfulness). Pluggable provider.
+  # groq's free tier is generous and CI-friendly; generation stays on Gemini.
+  judge_provider: "groq"                 # "groq" or "gemini"
+  judge_model: "openai/gpt-oss-20b"      # current Groq model (llama-3.3-70b was deprecated Jun 2026)
+  # gpt-oss is a reasoning model: give it room to finish the verdict, and keep
+  # reasoning "low" (judging is mechanical) to avoid truncation + save tokens.
+  judge_max_tokens: 8192
+  judge_reasoning_effort: "low"          # low | medium | high (groq gpt-oss only)
+  # Keep each faithfulness request under the judge's tokens-per-minute limit
+  # (Groq free gpt-oss-20b = 8000 TPM). Trim contexts sent to the judge.
+  judge_context_chunks: 3                # how many retrieved chunks to send to the judge
+  judge_context_char_limit: 900          # max chars per chunk sent to the judge
+  # Isolated store so eval doesn't touch your main collection.
+  persist_directory: "./data/vector_store/eval_chroma"
+  collection_name: "coderag_eval"
