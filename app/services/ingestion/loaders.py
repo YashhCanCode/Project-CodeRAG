@@ -56,8 +56,45 @@ SKIP_DIRS = {"node_modules", "__pycache__", ".git", "dist", "build",
 
 
 # ── Per-format extractors ─────────────────────────────────────────────────────
+def _ocr_pdf(path: Path) -> List[tuple]:
+    """
+    OCR a scanned PDF: render each page to an image (PyMuPDF) and read text
+    with Tesseract. Requires: pip install pymupdf pytesseract pillow, and the
+    tesseract binary (macOS: `brew install tesseract`).
+    """
+    try:
+        import io
+        import fitz  # PyMuPDF
+        import pytesseract
+        from PIL import Image
+    except Exception as e:
+        print(f"  [loader] OCR libraries unavailable ({type(e).__name__}). "
+              f"Install with: pip install pymupdf pytesseract pillow "
+              f"(plus the tesseract binary — macOS: brew install tesseract).")
+        return []
+
+    out = []
+    doc = fitz.open(str(path))
+    for i, page in enumerate(doc, start=1):
+        pix = page.get_pixmap(dpi=200)
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
+        try:
+            text = pytesseract.image_to_string(img)
+        except Exception as e:
+            print(f"  [loader] OCR failed on page {i} ({type(e).__name__}); "
+                  f"is the tesseract binary installed?")
+            text = ""
+        if text.strip():
+            out.append((text, i))
+    print(f"  [loader] OCR extracted text from {len(out)} page(s) of {path.name}")
+    return out
+
+
 def _extract_pdf(path: Path) -> List[tuple]:
-    """Return [(text, page_number)] — one entry per non-empty page."""
+    """
+    Return [(text, page_number)] per page. Falls back to OCR when the PDF has
+    no text layer (i.e. a scanned/image-only PDF).
+    """
     from pypdf import PdfReader
     reader = PdfReader(str(path))
     out = []
@@ -65,6 +102,10 @@ def _extract_pdf(path: Path) -> List[tuple]:
         text = page.extract_text() or ""
         if text.strip():
             out.append((text, i))
+
+    if not out:
+        print(f"  [loader] No text layer in {path.name}; attempting OCR…")
+        out = _ocr_pdf(path)
     return out
 
 

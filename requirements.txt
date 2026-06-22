@@ -21,3 +21,6 @@ langchain-groq
 python-multipart
 langchain-ollama
 pytest
+pymupdf
+pytesseract
+pillow

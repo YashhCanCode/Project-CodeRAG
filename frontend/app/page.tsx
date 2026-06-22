@@ -80,6 +80,7 @@ function IngestPanel({ onIngested }: { onIngested: () => void }) {
       <div className="flex flex-col gap-2 sm:flex-row">
         {tab === "upload" ? (
           <input
+            key="ingest-file"
             ref={fileRef}
             type="file"
             multiple
@@ -88,6 +89,7 @@ function IngestPanel({ onIngested }: { onIngested: () => void }) {
           />
         ) : (
           <input
+            key="ingest-url"
             type="text"
             value={urlValue}
             onChange={(e) => setUrlValue(e.target.value)}
@@ -138,23 +140,44 @@ function ResultCard({ chunk, onClick }: { chunk: Chunk; onClick: () => void }) {
 }
 
 // ── Detail modal ────────────────────────────────────────────────────────────
-function ChunkModal({ chunk, onClose }: { chunk: Chunk; onClose: () => void }) {
+function ChunkPanel({ chunk, onClose }: { chunk: Chunk; onClose: () => void }) {
+  const [show, setShow] = useState(false);
+
+  // trigger the slide-in on mount (next frame so the transition runs)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const id = requestAnimationFrame(() => setShow(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // animate out, then unmount
+  const close = useCallback(() => {
+    setShow(false);
+    const t = setTimeout(onClose, 300);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [close]);
 
   const lang = PRISM_LANG[chunk.language] || "text";
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50">
+      {/* backdrop fades in */}
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+        className={`absolute inset-0 bg-neutral-900/30 transition-opacity duration-300 ${
+          show ? "opacity-100" : "opacity-0"
+        }`}
+        onClick={close}
+      />
+      {/* left panel slides in */}
+      <div
+        className={`absolute left-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${
+          show ? "translate-x-0" : "-translate-x-full"
+        }`}
       >
         <div className="flex items-start justify-between gap-3 border-b border-neutral-200 px-5 py-3">
           <div className="min-w-0">
@@ -162,13 +185,13 @@ function ChunkModal({ chunk, onClose }: { chunk: Chunk; onClose: () => void }) {
             <p className="truncate font-mono text-xs text-neutral-500">{chunk.citation}</p>
           </div>
           <button
-            onClick={onClose}
+            onClick={close}
             className="shrink-0 rounded-lg px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
           >
             Esc ✕
           </button>
         </div>
-        <div className="overflow-auto p-1 text-sm">
+        <div className="flex-1 overflow-auto p-1 text-sm">
           <SyntaxHighlighter
             language={lang}
             style={oneLight}
@@ -281,7 +304,7 @@ export default function Home() {
         </div>
       )}
 
-      {selected && <ChunkModal chunk={selected} onClose={() => setSelected(null)} />}
+      {selected && <ChunkPanel chunk={selected} onClose={() => setSelected(null)} />}
 
       <footer className="mt-auto pt-4 text-center text-xs text-neutral-400">
         CodeRAG · hybrid retrieval + reranking + citation-enforced answers
