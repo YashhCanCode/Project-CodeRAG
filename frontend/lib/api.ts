@@ -69,3 +69,43 @@ export async function search(question: string): Promise<QueryResult> {
   if (!res.ok) return asError(res);
   return res.json();
 }
+
+// ── Research landscape (arXiv) ────────────────────────────────────────────
+export type Paper = {
+  id: string;
+  title: string;
+  authors: string[];
+  abstract: string;
+  url: string;
+  pdf_url: string;
+  published: string;
+  categories: string[];
+  problem: string;
+  method: string;
+  results: string;
+  contribution: string;
+  cluster: string;
+};
+
+export type Synthesis = {
+  overview: string;
+  clusters: { theme: string; paper_ids: string[] }[];
+  open_problems: string[];
+  tensions: string[];
+};
+
+export type Landscape = {
+  topic: string;
+  papers: Paper[];
+  synthesis: Synthesis;
+};
+
+export async function research(topic: string, maxPapers = 8): Promise<Landscape> {
+  const res = await fetch(`${API}/research`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topic, max_papers: maxPapers }),
+  });
+  if (!res.ok) return asError(res);
+  return res.json();
+}

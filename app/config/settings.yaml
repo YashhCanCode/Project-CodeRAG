@@ -72,3 +72,11 @@ evaluation:
   # Isolated store so eval doesn't touch your main collection.
   persist_directory: "./data/vector_store/eval_chroma"
   collection_name: "coderag_eval"
+
+# ── Research landscape (arXiv agent) ─────────────────────────────────────
+research:
+  candidates: 20          # arXiv results fetched before reranking
+  top_k: 8                # papers kept after reranking
+  # Relevance gate: if the best reranked paper scores below this, refuse rather
+  # than synthesize a landscape from irrelevant papers (mirrors the citation guard).
+  min_relevance: 0.10

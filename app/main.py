@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.routes import health, ingest, query
+from app.routes import health, ingest, query, research
 
 app = FastAPI(title="CodeRAG", version=__version__)
 
@@ -29,6 +29,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(ingest.router)
 app.include_router(query.router)
+app.include_router(research.router)
 
 
 if __name__ == "__main__":
