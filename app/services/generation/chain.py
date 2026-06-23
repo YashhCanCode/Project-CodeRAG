@@ -86,6 +86,8 @@ def generate_answer(
             "citations": [],
             "refused": True,
             "chunks_used": 0,
+            "usage": {"input": 0, "output": 0, "total": 0},
+            "model": None,
         }
 
     # ── Build prompt ───────────────────────────────────────────────────────
@@ -102,6 +104,12 @@ def generate_answer(
     llm = _build_llm()
     response = llm.invoke([system_msg, human_msg])
 
+    um = getattr(response, "usage_metadata", None) or {}
+    usage = {
+        "input":  um.get("input_tokens", 0),
+        "output": um.get("output_tokens", 0),
+        "total":  um.get("total_tokens", 0),
+    }
     citations = [c["citation"] for c in trusted]
 
     return {
@@ -109,4 +117,6 @@ def generate_answer(
         "citations":   citations,
         "refused":     False,
         "chunks_used": len(trusted),
+        "usage":       usage,
+        "model":       load_settings()["generation"]["model"],
     }

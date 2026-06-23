@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.services.retrieval.pipeline import retrieve
 from app.services.generation.chain import generate_answer
 from app.services.vector_store.store import load_vector_store
+from app.observability.tracer import RequestTrace
 from app import state
 
 router = APIRouter()
@@ -46,31 +47,38 @@ def _get_store():
 @router.post("/query")
 def query(req: QueryRequest):
     store = _get_store()
-    chunks = retrieve(store, req.question)
 
-    response: Dict[str, Any] = {
-        "question":  req.question,
-        "retrieved": _retrieved_view(chunks),
-    }
+    with RequestTrace("query", question=req.question[:200]) as tr:
+        with tr.span("retrieval"):
+            chunks = retrieve(store, req.question)
 
-    if req.generate:
-        try:
-            result = generate_answer(req.question, chunks)
-            response.update({
-                "answer":      result["answer"],
-                "citations":   result["citations"],
-                "refused":     result["refused"],
-                "chunks_used": result["chunks_used"],
-            })
-        except Exception as e:
-            msg = str(e)
-            note = "rate limit / quota" if ("429" in msg or "RESOURCE_EXHAUSTED" in msg) else "generation error"
-            response.update({
-                "answer":      None,
-                "citations":   [],
-                "refused":     False,
-                "chunks_used": 0,
-                "answer_error": f"Answer unavailable ({note}).",
-            })
+        response: Dict[str, Any] = {
+            "question":  req.question,
+            "retrieved": _retrieved_view(chunks),
+        }
+
+        if req.generate:
+            try:
+                with tr.span("generation"):
+                    result = generate_answer(req.question, chunks)
+                tr.record_usage(result.get("model"), result.get("usage"))
+                tr.set_refused(result["refused"])
+                response.update({
+                    "answer":      result["answer"],
+                    "citations":   result["citations"],
+                    "refused":     result["refused"],
+                    "chunks_used": result["chunks_used"],
+                })
+            except Exception as e:
+                msg = str(e)
+                note = "rate limit / quota" if ("429" in msg or "RESOURCE_EXHAUSTED" in msg) else "generation error"
+                tr.set_refused(False)
+                response.update({
+                    "answer":      None,
+                    "citations":   [],
+                    "refused":     False,
+                    "chunks_used": 0,
+                    "answer_error": f"Answer unavailable ({note}).",
+                })
 
     return response

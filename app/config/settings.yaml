@@ -55,6 +55,7 @@ vector_store:
 evaluation:
   # Regression gate: build fails if mean faithfulness drops below this.
   min_faithfulness: 0.70
+  max_tokens_per_request: 6000     # CI cost gate: avg total tokens/request
   # Questions to run for the fast PR smoke subset.
   subset_size: 15
   # LLM that JUDGES the answers (faithfulness). Pluggable provider.
@@ -80,3 +81,13 @@ research:
   # Relevance gate: if the best reranked paper scores below this, refuse rather
   # than synthesize a landscape from irrelevant papers (mirrors the citation guard).
   min_relevance: 0.10
+
+# ── Observability (Project 3) ────────────────────────────────────────────
+observability:
+  trace_log: "./logs/traces.jsonl"     # per-request JSONL traces
+  # USD per 1M tokens (input, output) — estimates; edit to your real pricing.
+  pricing:
+    "gemini-2.5-flash":   {input: 0.30, output: 2.50}
+    "openai/gpt-oss-20b": {input: 0.10, output: 0.50}
+    "openai/gpt-oss-120b": {input: 0.15, output: 0.75}
+    "mistral:7b":         {input: 0.0,  output: 0.0}   # local, free

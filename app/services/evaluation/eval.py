@@ -74,10 +74,13 @@ def build_eval_store():
 def collect_samples(store, pairs, sleep_s=0.0, ctx_chunks=3, ctx_chars=900):
     """Run the real pipeline for each question and build RAGAS records.
 
-    Contexts sent to the judge are trimmed (count + length) so each faithfulness
-    request stays under the judge's tokens-per-minute limit.
+    Also accumulates token usage + cost for the CI cost gate. Contexts sent to
+    the judge are trimmed so each faithfulness request stays under the judge's TPM.
     """
+    from app.observability.cost import cost_for
+
     records, refusals = [], 0
+    total_tokens, total_cost = 0, 0.0
     for i, p in enumerate(pairs):
         if i and sleep_s:
             time.sleep(sleep_s)   # throttle to respect free-tier rate limits
@@ -86,6 +89,9 @@ def collect_samples(store, pairs, sleep_s=0.0, ctx_chunks=3, ctx_chars=900):
         result = generate_answer(q, chunks)
         if result["refused"]:
             refusals += 1
+        u = result.get("usage") or {}
+        total_tokens += u.get("total", 0)
+        total_cost += cost_for(result.get("model") or "", u.get("input", 0), u.get("output", 0))
         contexts = [c["content"][:ctx_chars] for c in chunks[:ctx_chunks]] or ["(no context retrieved)"]
         records.append({
             "user_input": q,
@@ -94,7 +100,8 @@ def collect_samples(store, pairs, sleep_s=0.0, ctx_chunks=3, ctx_chars=900):
             "reference": p.get("ground_truth", ""),
         })
         print(f"  [{'REFUSED' if result['refused'] else 'answered'}] {q[:60]}")
-    return records, refusals
+    stats = {"tokens": total_tokens, "cost": total_cost}
+    return records, refusals, stats
 
 
 def _ensure_vertexai_shim():
@@ -197,6 +204,9 @@ def main():
                     help="regression threshold; build fails below this")
     ap.add_argument("--sleep", type=float, default=4.0,
                     help="seconds to wait between questions (free-tier throttle)")
+    ap.add_argument("--max-tokens", type=int,
+                    default=settings.get("max_tokens_per_request", 6000),
+                    help="CI cost gate: max avg total tokens per request")
     args = ap.parse_args()
 
     if not os.getenv("GOOGLE_API_KEY"):
@@ -212,7 +222,7 @@ def main():
 
     store = build_eval_store()
     try:
-        records, refusals = collect_samples(
+        records, refusals, stats = collect_samples(
             store, pairs, sleep_s=args.sleep,
             ctx_chunks=settings.get("judge_context_chunks", 3),
             ctx_chars=settings.get("judge_context_char_limit", 900),
@@ -233,20 +243,31 @@ def main():
             sys.exit(2)
         raise
     score, n_scored, n_total = mean_faithfulness(result)
+    n = max(len(records), 1)
+    avg_tokens = stats["tokens"] / n
+    avg_cost = stats["cost"] / n
 
     print("\n" + "=" * 60)
-    print(f"  Mean faithfulness : {score:.3f}")
-    print(f"  Threshold         : {args.min_faithfulness:.3f}")
+    print(f"  Mean faithfulness : {score:.3f}  (threshold {args.min_faithfulness:.3f})")
     print(f"  Scored            : {n_scored}/{n_total}")
     print(f"  Refusals          : {refusals}/{len(records)}")
+    print(f"  Avg tokens/req    : {avg_tokens:.0f}  (budget {args.max_tokens}) ")
+    print(f"  Avg cost/req      : ${avg_cost:.6f}   (total ${stats['cost']:.5f})")
     print("=" * 60)
     if n_scored < n_total:
-        print(f"  WARNING: {n_total - n_scored} sample(s) did not score "
-              f"(judge truncation/parse) and were excluded from the mean.")
+        print(f"  WARNING: {n_total - n_scored} sample(s) did not score and were excluded.")
 
-    code = gate(score, args.min_faithfulness)
-    print("PASS ✅" if code == 0 else "FAIL ❌ (faithfulness below threshold)")
-    sys.exit(code)
+    failures = []
+    if score < args.min_faithfulness:
+        failures.append(f"faithfulness {score:.3f} < {args.min_faithfulness:.3f}")
+    if avg_tokens > args.max_tokens:
+        failures.append(f"avg tokens {avg_tokens:.0f} > {args.max_tokens}")
+
+    if failures:
+        print("FAIL ❌  " + "; ".join(failures))
+        sys.exit(1)
+    print("PASS ✅")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
