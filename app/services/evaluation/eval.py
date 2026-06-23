@@ -220,10 +220,16 @@ def main():
         print("\n[eval] Scoring faithfulness with RAGAS...")
         result = run_ragas(records)
     except Exception as e:
-        if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
-            print("\nERROR: LLM provider rate limit / quota exhausted (HTTP 429).")
-            print("  - Wait for the quota to reset, or enable billing, or")
-            print("  - run a smaller --subset, raise --sleep, or switch provider in settings.yaml.")
+        msg = str(e).lower()
+        infra = any(t in msg for t in [
+            "resource_exhausted", "429", "413", "rate limit", "rate_limit",
+            "tokens per minute", "quota", "request too large", "connection", "timeout",
+        ])
+        if infra:
+            print("\nERROR: LLM provider issue (rate limit / quota / request too large / network).")
+            print("  This is an infrastructure problem, not a quality regression.")
+            print("  - Wait for quota to reset, enable billing, lower --subset, or")
+            print("  - reduce judge context (settings: judge_context_chunks / judge_context_char_limit).")
             sys.exit(2)
         raise
     score, n_scored, n_total = mean_faithfulness(result)
