@@ -51,6 +51,7 @@ def query(req: QueryRequest):
     with RequestTrace("query", question=req.question[:200]) as tr:
         with tr.span("retrieval"):
             chunks = retrieve(store, req.question)
+        tr.set_retrieval(chunks)
 
         response: Dict[str, Any] = {
             "question":  req.question,
@@ -63,6 +64,8 @@ def query(req: QueryRequest):
                     result = generate_answer(req.question, chunks)
                 tr.record_usage(result.get("model"), result.get("usage"))
                 tr.set_refused(result["refused"])
+                tr.set_prompt(result.get("prompt"))
+                tr.set_answer(result.get("answer"), result.get("citations"))
                 response.update({
                     "answer":      result["answer"],
                     "citations":   result["citations"],
@@ -73,6 +76,7 @@ def query(req: QueryRequest):
                 msg = str(e)
                 note = "rate limit / quota" if ("429" in msg or "RESOURCE_EXHAUSTED" in msg) else "generation error"
                 tr.set_refused(False)
+                tr.set_error(True)
                 response.update({
                     "answer":      None,
                     "citations":   [],

@@ -33,6 +33,11 @@ class RequestTrace:
         self.model: Optional[str] = None
         self.cost: float = 0.0
         self.refused: Optional[bool] = None
+        self.error: bool = False
+        self.retrieved: list = []
+        self.prompt: Optional[str] = None
+        self.answer: Optional[str] = None
+        self.num_citations: int = 0
         self.duration_ms: float = 0.0
         self._t0 = 0.0
         self._root = None
@@ -60,6 +65,26 @@ class RequestTrace:
     def set_refused(self, refused: bool) -> None:
         self.refused = refused
 
+    def set_error(self, errored: bool = True) -> None:
+        self.error = errored
+
+    def set_retrieval(self, chunks) -> None:
+        # compact view: which chunks were retrieved + their scores (full visibility)
+        self.retrieved = [{
+            "citation": c.get("citation"),
+            "source": c.get("source"),
+            "score": c.get("score"),
+            "rerank_prob": c.get("rerank_prob"),
+            "bm25_score": c.get("bm25_score"),
+        } for c in chunks]
+
+    def set_prompt(self, prompt: Optional[str]) -> None:
+        self.prompt = prompt
+
+    def set_answer(self, answer: Optional[str], citations=None) -> None:
+        self.answer = answer
+        self.num_citations = len(citations or [])
+
     def __exit__(self, *exc):
         self.duration_ms = round((time.perf_counter() - self._t0) * 1000, 2)
         otel.end_span(self._root)
@@ -71,6 +96,11 @@ class RequestTrace:
             "usage": self.usage,
             "cost_usd": round(self.cost, 6),
             "refused": self.refused,
+            "error": self.error,
+            "num_citations": self.num_citations,
+            "retrieved": self.retrieved,    # which chunks + scores
+            "prompt": self.prompt,          # exact prompt sent to the LLM
+            "answer": self.answer,          # final response
             **self.meta,
         }
         _write_jsonl(trace)

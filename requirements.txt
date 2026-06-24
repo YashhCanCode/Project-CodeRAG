@@ -24,3 +24,4 @@ pytest
 pymupdf
 pytesseract
 pillow
+langfuse

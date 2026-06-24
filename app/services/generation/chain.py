@@ -16,6 +16,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.utils.paths import load_prompts as _load_prompts_file, load_settings
 from app.services.generation.citation_guard import has_sufficient_evidence
+from app.observability.langfuse_client import get_callback_handler
 
 
 def _load_prompts(version: str = "v1") -> Dict[str, str]:
@@ -102,7 +103,9 @@ def generate_answer(
 
     # ── Call LLM ──────────────────────────────────────────────────────────
     llm = _build_llm()
-    response = llm.invoke([system_msg, human_msg])
+    _cb = get_callback_handler()
+    _config = {"callbacks": [_cb]} if _cb else {}
+    response = llm.invoke([system_msg, human_msg], config=_config)
 
     um = getattr(response, "usage_metadata", None) or {}
     usage = {
@@ -111,6 +114,7 @@ def generate_answer(
         "total":  um.get("total_tokens", 0),
     }
     citations = [c["citation"] for c in trusted]
+    prompt = system_msg.content + "\n\n--- USER ---\n\n" + human_msg.content
 
     return {
         "answer":      response.content,
@@ -119,4 +123,5 @@ def generate_answer(
         "chunks_used": len(trusted),
         "usage":       usage,
         "model":       load_settings()["generation"]["model"],
+        "prompt":      prompt,
     }

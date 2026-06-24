@@ -60,16 +60,16 @@ evaluation:
   subset_size: 15
   # LLM that JUDGES the answers (faithfulness). Pluggable provider.
   # groq's free tier is generous and CI-friendly; generation stays on Gemini.
-  judge_provider: "groq"                 # "groq" or "gemini"
-  judge_model: "openai/gpt-oss-20b"      # current Groq model (llama-3.3-70b was deprecated Jun 2026)
+  judge_provider: "gemini"               # "groq" or "gemini"
+  judge_model: "gemini-2.5-flash-lite"   # high TPM, avoids Groq free-tier 413; separate quota from gen
   # gpt-oss is a reasoning model: give it room to finish the verdict, and keep
   # reasoning "low" (judging is mechanical) to avoid truncation + save tokens.
   judge_max_tokens: 8192
   judge_reasoning_effort: "low"          # low | medium | high (groq gpt-oss only)
   # Keep each faithfulness request under the judge's tokens-per-minute limit
   # (Groq free gpt-oss-20b = 8000 TPM). Trim contexts sent to the judge.
-  judge_context_chunks: 3                # how many retrieved chunks to send to the judge
-  judge_context_char_limit: 900          # max chars per chunk sent to the judge
+  judge_context_chunks: 5                # how many retrieved chunks to send to the judge
+  judge_context_char_limit: 1500         # max chars per chunk sent to the judge
   # Isolated store so eval doesn't touch your main collection.
   persist_directory: "./data/vector_store/eval_chroma"
   collection_name: "coderag_eval"
@@ -80,7 +80,7 @@ research:
   top_k: 8                # papers kept after reranking
   # Relevance gate: if the best reranked paper scores below this, refuse rather
   # than synthesize a landscape from irrelevant papers (mirrors the citation guard).
-  min_relevance: 0.10
+  min_relevance: 0.55
 
 # ── Observability (Project 3) ────────────────────────────────────────────
 observability:

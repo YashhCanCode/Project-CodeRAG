@@ -35,8 +35,12 @@ class MetricsStore:
         latencies = [t["duration_ms"] for t in traces if "duration_ms" in t]
         costs = [t.get("cost_usd", 0.0) for t in traces]
         totals = [(t.get("usage") or {}).get("total", 0) for t in traces]
-        answered = [t for t in traces if t.get("refused") is not None]
-        refused = [t for t in answered if t.get("refused")]
+        # generation was attempted (refused set) and didn't hard-error
+        errors = [t for t in traces if t.get("error")]
+        attempts = [t for t in traces if t.get("refused") is not None and not t.get("error")]
+        refused = [t for t in attempts if t.get("refused")]
+        answered = [t for t in attempts if not t.get("refused")]
+        grounded = [t for t in answered if (t.get("num_citations") or 0) > 0]
 
         # per-stage latency percentiles
         stages: Dict[str, List[float]] = {}
@@ -64,7 +68,9 @@ class MetricsStore:
                 "total": round(sum(costs), 6),
                 "avg_per_request": round(sum(costs) / len(traces), 6),
             },
-            "refusal_rate": round(len(refused) / len(answered), 3) if answered else 0.0,
+            "refusal_rate": round(len(refused) / len(attempts), 3) if attempts else 0.0,
+            "citation_coverage": round(len(grounded) / len(attempts), 3) if attempts else 0.0,
+            "error_rate": round(len(errors) / len(traces), 3) if traces else 0.0,
         }
 
 

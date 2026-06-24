@@ -32,3 +32,16 @@ def test_cost_for():
     assert round(cost_for("gemini-2.5-flash", 1_000_000, 1_000_000), 2) == 2.80
     assert cost_for("mistral:7b", 1_000_000, 1_000_000) == 0.0     # local/free
     assert cost_for("unknown-model", 999, 999) == 0.0              # no pricing
+
+
+def test_quality_metrics_coverage_and_errors():
+    m = MetricsStore()
+    m.record({"duration_ms": 100, "refused": True,  "error": False, "num_citations": 0, "usage": {"total": 0}})
+    m.record({"duration_ms": 100, "refused": False, "error": False, "num_citations": 2, "usage": {"total": 50}})
+    m.record({"duration_ms": 100, "refused": False, "error": False, "num_citations": 3, "usage": {"total": 50}})
+    m.record({"duration_ms": 100, "refused": False, "error": True,  "num_citations": 0, "usage": {"total": 0}})
+    s = m.snapshot()
+    # attempts = 3 non-error with refused set: 1 refused, 2 answered & grounded
+    assert s["refusal_rate"] == round(1 / 3, 3)
+    assert s["citation_coverage"] == round(2 / 3, 3)
+    assert s["error_rate"] == 0.25

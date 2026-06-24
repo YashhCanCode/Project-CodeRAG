@@ -42,6 +42,11 @@ sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[3]
 from dotenv import load_dotenv
 load_dotenv()
 
+# Silence harmless asyncio "Event loop is closed" noise from the Google SDK's
+# async gRPC/SSL client during interpreter shutdown (fires after the run completes).
+import logging as _logging
+_logging.getLogger("asyncio").setLevel(_logging.CRITICAL)
+
 from app.utils.paths import PROJECT_ROOT, load_settings
 from app.services.ingestion.loaders import load_local_directory
 from app.services.chunking.chunker import chunk_documents
